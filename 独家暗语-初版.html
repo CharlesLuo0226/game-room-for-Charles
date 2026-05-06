@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎮 无服务器游戏大厅 - 分享链接即可联机</title>
+    <style>
+        :root {
+            --bg: #0f0f1a;
+            --panel: #1a1a2e;
+            --card: #16213e;
+            --text: #e0e0e0;
+            --accent: #e94560;
+            --accent2: #00d2ff;
+            --gold: #f0c060;
+            --green: #4caf84;
+            --border: rgba(255,255,255,0.08);
+            --radius: 16px;
+            --shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body {
+            font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: var(--bg);
+            background-image: radial-gradient(ellipse at 20% 20%, rgba(233,68,96,0.1) 0%, transparent 50%),
+                            radial-gradient(ellipse at 80% 80%, rgba(0,210,255,0.08) 0%, transparent 50%);
+            min-height: 100vh; color: var(--text); display: flex; justify-content: center; align-items: center; padding: 20px;
+        }
+        .app {
+            width: 100%; max-width: 1200px; display: flex; flex-direction: column; gap: 24px;
+        }
+        .header {
+            text-align: center;
+            background: var(--panel); border-radius: var(--radius); padding: 20px 24px;
+            border: 1px solid var(--border); box-shadow: var(--shadow);
+        }
+        .header h1 {
+            font-size: 2.4rem; background: linear-gradient(135deg, #e94560, #f0c060, #00d2ff);
+            -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .room-info {
+            margin-top: 14px; display: flex; gap: 12px; align-items: center; justify-content: center; flex-wrap: wrap;
+        }
+        .room-badge {
+            background: rgba(0,210,255,0.1); border:1px solid rgba(0,210,255,0.3); padding:6px 16px; border-radius:20px;
+            font-size:0.85rem; font-weight:600; letter-spacing:0.5px;
+        }
+        .copy-btn {
+            background: var(--accent); border:none; color:white; padding:6px 16px; border-radius:20px; cursor:pointer;
+            font-weight:600; letter-spacing:0.5px; transition:0.2s;
+        }
+        .copy-btn:hover { background: #ff5252; }
+        .connection-dot {
+            width:10px; height:10px; border-radius:50%; background: var(--green); display:inline-block; margin-right:6px;
+            box-shadow:0 0 10px var(--green);
+        }
+        .connection-dot.disconnected { background: #ff4757; box-shadow:0 0 10px #ff4757; }
+        .main-content {
+            display: flex; gap: 24px; flex-wrap: wrap;
+        }
+        .panel {
+            background: var(--panel); border-radius: var(--radius); padding: 24px;
+            border: 1px solid var(--border); box-shadow: var(--shadow); backdrop-filter: blur(10px);
+        }
+        .my-panel { flex: 1 1 500px; }
+        .players-panel { flex: 1 1 360px; max-height: 600px; overflow-y: auto; }
+        .players-panel::-webkit-scrollbar { width:5px; }
+        .players-panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius:10px; }
+        .panel-title {
+            font-size:1.2rem; font-weight:700; margin-bottom:18px; display:flex; align-items:center; gap:10px;
+        }
+        .input-group { margin-bottom: 16px; }
+        .input-group label { display:block; font-size:0.75rem; text-transform:uppercase; color:#a0a0b8; margin-bottom:6px; }
+        .input-group input {
+            width:100%; padding:12px; border-radius:10px; border:2px solid rgba(255,255,255,0.1);
+            background: rgba(255,255,255,0.04); color:white; font-size:1rem; outline:none;
+            transition:0.2s;
+        }
+        .input-group input:focus { border-color: var(--accent2); box-shadow:0 0 0 3px rgba(0,210,255,0.2); }
+        .avatar-grid {
+            display: grid; grid-template-columns: repeat(9, 1fr); gap: 8px; margin-bottom:20px;
+        }
+        @media (max-width: 800px) {
+            .avatar-grid { grid-template-columns: repeat(6, 1fr); }
+        }
+        @media (max-width: 500px) {
+            .avatar-grid { grid-template-columns: repeat(4, 1fr); }
+        }
+        .avatar-cell {
+            aspect-ratio:1; border-radius:50%; display:flex; align-items:center; justify-content:center;
+            font-size:1.8rem; background: var(--card); border:3px solid transparent; cursor:pointer;
+            transition:0.2s; position:relative;
+        }
+        .avatar-cell:hover:not(.locked) { transform:translateY(-4px); border-color:rgba(255,255,255,0.5); }
+        .avatar-cell.selected { border-color: var(--accent2); box-shadow:0 0 0 3px rgba(0,210,255,0.6); }
+        .avatar-cell.locked {
+            filter:grayscale(0.8); opacity:0.5; cursor:not-allowed; border-color:rgba(255,255,255,0.05);
+        }
+        .avatar-cell.locked::after {
+            content:'🔒'; position:absolute; bottom:2px; right:2px; font-size:0.7rem;
+            background:rgba(0,0,0,0.7); border-radius:50%; width:22px; height:22px; display:flex;
+            align-items:center; justify-content:center;
+        }
+        .avatar-cell.mine {
+            border-color: var(--gold); box-shadow:0 0 0 4px rgba(240,192,96,0.7); filter:none; opacity:1;
+        }
+        .btn-row { display:flex; gap:12px; flex-wrap:wrap; }
+        .btn {
+            padding:12px 24px; border-radius:25px; font-weight:700; letter-spacing:1px; cursor:pointer;
+            border:none; transition:0.2s; font-size:1rem;
+        }
+        .btn-primary { background: var(--accent); color:white; box-shadow:0 6px 20px rgba(233,68,96,0.4); }
+        .btn-primary:disabled { background:#555; box-shadow:none; cursor:not-allowed; }
+        .btn-outline { background:transparent; border:2px solid rgba(255,255,255,0.2); color:#ccc; }
+        .btn-outline:hover { border-color:white; color:white; }
+        .player-card {
+            display:flex; align-items:center; gap:12px; padding:12px; margin-bottom:8px;
+            background: rgba(255,255,255,0.03); border-radius:12px; border:1px solid rgba(255,255,255,0.06);
+        }
+        .player-card.me { border-color: rgba(240,192,96,0.5); background: rgba(240,192,96,0.06); }
+        .player-avatar { width:44px; height:44px; border-radius:50%; background: var(--card);
+            display:flex; align-items:center; justify-content:center; font-size:1.6rem; 
+            border:2px solid rgba(255,255,255,0.2);
+        }
+        .player-name { font-weight:700; font-size:1rem; }
+        .status-tag {
+            font-size:0.65rem; font-weight:600; padding:2px 10px; border-radius:10px;
+            background: rgba(0,210,255,0.15); color: var(--accent2);
+        }
+        .status-tag.joined { background: rgba(76,175,132,0.2); color: var(--green); }
+        .empty-state { text-align:center; padding:30px; color:#aaa; }
+        .toast {
+            position:fixed; top:20px; right:20px; padding:12px 20px; border-radius:10px; background:#333;
+            color:white; font-weight:600; z-index:999; animation: slideIn 0.3s ease;
+            box-shadow:0 8px 24px rgba(0,0,0,0.4);
+        }
+        @keyframes slideIn { from{transform:translateX(120%);opacity:0;} to{transform:translateX(0);opacity:1;} }
+    </style>
+</head>
+<body>
+<div class="app">
+    <div class="header">
+        <h1>⚔️ 游戏大厅 · 无服务器版</h1>
+        <div class="room-info">
+            <div class="room-badge">
+                <span class="connection-dot" id="connDot"></span>
+                <span id="connText">等待连接...</span>
+            </div>
+            <span id="roomIdDisplay" style="font-family:monospace; font-size:0.8rem; color:#aaa;"></span>
+            <button class="copy-btn" id="copyLinkBtn" style="display:none;">📋 复制邀请链接</button>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="panel my-panel">
+            <div class="panel-title"><span>🎭</span> 我的角色</div>
+            <div class="input-group">
+                <label>角色名称</label>
+                <input type="text" id="nameInput" placeholder="输入角色名..." maxlength="16" autocomplete="off">
+            </div>
+            <div style="margin-bottom:10px; font-size:0.75rem; text-transform:uppercase; color:#a0a0b8;">选择头像（36款）</div>
+            <div class="avatar-grid" id="avatarGrid"></div>
+            <div class="btn-row">
+                <button class="btn btn-primary" id="btnJoin" disabled>🎯 加入游戏</button>
+                <button class="btn btn-outline" id="btnLeave" style="display:none;">🚪 退出</button>
+            </div>
+        </div>
+
+        <div class="panel players-panel">
+            <div class="panel-title"><span>👥</span> 在线玩家 <span id="playerCount" style="font-size:0.8rem;">0</span></div>
+            <div id="playersList"><div class="empty-state">🏰 等待玩家加入...</div></div>
+        </div>
+    </div>
+</div>
+
+<script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+<script>
+    (() => {
+        // ---------- 头像库 (36个，前三个：仓鼠、恐龙、小丑) ----------
+        const AVATARS = [
+            { id:0, emoji:'🐹', name:'仓鼠' },
+            { id:1, emoji:'🦕', name:'恐龙' },
+            { id:2, emoji:'🤡', name:'小丑' },
+            { id:3, emoji:'🦊', name:'狐狸' },
+            { id:4, emoji:'🐱', name:'猫咪' },
+            { id:5, emoji:'🐶', name:'小狗' },
+            { id:6, emoji:'🐼', name:'熊猫' },
+            { id:7, emoji:'🦁', name:'狮子' },
+            { id:8, emoji:'🐰', name:'兔子' },
+            { id:9, emoji:'🐸', name:'青蛙' },
+            { id:10, emoji:'🦉', name:'猫头鹰' },
+            { id:11, emoji:'🐲', name:'龙' },
+            { id:12, emoji:'🦄', name:'独角兽' },
+            { id:13, emoji:'🐙', name:'章鱼' },
+            { id:14, emoji:'🦋', name:'蝴蝶' },
+            { id:15, emoji:'🐨', name:'考拉' },
+            { id:16, emoji:'🐯', name:'老虎' },
+            { id:17, emoji:'🐮', name:'奶牛' },
+            { id:18, emoji:'🐷', name:'小猪' },
+            { id:19, emoji:'🐔', name:'小鸡' },
+            { id:20, emoji:'🐧', name:'企鹅' },
+            { id:21, emoji:'🦆', name:'鸭子' },
+            { id:22, emoji:'🦅', name:'鹰' },
+            { id:23, emoji:'🐺', name:'狼' },
+            { id:24, emoji:'🦇', name:'蝙蝠' },
+            { id:25, emoji:'🐻', name:'熊' },
+            { id:26, emoji:'🐒', name:'猴子' },
+            { id:27, emoji:'🐗', name:'野猪' },
+            { id:28, emoji:'🐴', name:'马' },
+            { id:29, emoji:'🐑', name:'绵羊' },
+            { id:30, emoji:'🐘', name:'大象' },
+            { id:31, emoji:'🦒', name:'长颈鹿' },
+            { id:32, emoji:'🦈', name:'鲨鱼' },
+            { id:33, emoji:'🐬', name:'海豚' },
+            { id:34, emoji:'🦀', name:'螃蟹' },
+            { id:35, emoji:'🐞', name:'瓢虫' }
+        ];
+
+        // DOM 元素
+        const $ = (s) => document.querySelector(s);
+        const nameInput = $('#nameInput');
+        const btnJoin = $('#btnJoin');
+        const btnLeave = $('#btnLeave');
+        const avatarGrid = $('#avatarGrid');
+        const playersList = $('#playersList');
+        const playerCount = $('#playerCount');
+        const connDot = $('#connDot');
+        const connText = $('#connText');
+        const copyLinkBtn = $('#copyLinkBtn');
+        const roomIdDisplay = $('#roomIdDisplay');
+
+        // 状态变量
+        let myPeerId = null;
+        let myConfirmed = null;
+        let myTempName = '';
+        let myTempAvatar = null;
+        let peers = {};
+        let hostConn = null;
+        let hostClientConns = [];
+        let amHost = false;
+        let roomPeerId = null;
+
+        function showToast(msg) {
+            const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg;
+            document.body.appendChild(t); setTimeout(() => t.remove(), 2500);
+        }
+
+        function updateConnectionUI(connected) {
+            connDot.className = 'connection-dot' + (connected ? '' : ' disconnected');
+            connText.textContent = connected ? '已连接' : '未连接';
+        }
+
+        function sendToHost(data) {
+            if (hostConn && hostConn.open) hostConn.send(data);
+        }
+
+        function broadcastToClients(data) {
+            hostClientConns.forEach(conn => { if (conn.open) conn.send(data); });
+        }
+
+        function applyFullState(state) {
+            peers = {};
+            for (const [pid, pdata] of Object.entries(state.players)) {
+                peers[pid] = { conn: peers[pid]?.conn, data: pdata };
+                if (hostClientConns.find(c => c.peer === pid)) {
+                    peers[pid].conn = hostClientConns.find(c => c.peer === pid);
+                }
+            }
+            renderAll();
+        }
+
+        function sendLocalUpdate() {
+            const update = {
+                type: 'update',
+                tempName: myTempName,
+                tempAvatar: myTempAvatar,
+                joined: !!myConfirmed,
+                name: myConfirmed?.name,
+                avatarId: myConfirmed?.avatarId
+            };
+            if (amHost) {
+                applyLocalUpdateToHost(update);
+                broadcastToClients({ type: 'fullState', state: getFullState() });
+            } else {
+                sendToHost(update);
+            }
+        }
+
+        function applyLocalUpdateToHost(update) {
+            if (!peers[myPeerId]) peers[myPeerId] = { conn: null, data: {} };
+            const me = peers[myPeerId].data;
+            me.tempName = update.tempName;
+            me.tempAvatar = update.tempAvatar;
+            if (update.joined) {
+                me.joined = true;
+                me.name = update.name;
+                me.avatarId = update.avatarId;
+            } else {
+                me.joined = false;
+                me.name = null;
+                me.avatarId = null;
+            }
+            renderAll();
+        }
+
+        function getFullState() {
+            const players = {};
+            for (const [pid, obj] of Object.entries(peers)) {
+                players[pid] = { ...obj.data };
+            }
+            const lockedAvatars = {};
+            for (const [pid, obj] of Object.entries(peers)) {
+                if (obj.data.joined && obj.data.avatarId !== undefined && obj.data.avatarId !== null) {
+                    lockedAvatars[obj.data.avatarId] = pid;
+                }
+            }
+            return { players, lockedAvatars };
+        }
+
+        function renderAvatarGrid() {
+            avatarGrid.innerHTML = '';
+            const lockedAvatars = {};
+            for (const [pid, obj] of Object.entries(peers)) {
+                if (obj.data.joined && obj.data.avatarId !== undefined) {
+                    lockedAvatars[obj.data.avatarId] = pid;
+                }
+            }
+            AVATARS.forEach(av => {
+                const cell = document.createElement('div');
+                cell.className = 'avatar-cell';
+                cell.dataset.avatarId = av.id;
+                cell.title = av.name;
+                cell.innerHTML = `<span>${av.emoji}</span>`;
+
+                if (lockedAvatars[av.id] && lockedAvatars[av.id] !== myPeerId) {
+                    cell.classList.add('locked');
+                } else if (myConfirmed && myConfirmed.avatarId === av.id) {
+                    cell.classList.add('mine');
+                } else if (!myConfirmed && myTempAvatar === av.id) {
+                    cell.classList.add('selected');
+                }
+                cell.onclick = () => {
+                    if (myConfirmed) {
+                        showToast('已加入游戏，请先退出再换头像'); return;
+                    }
+                    if (lockedAvatars[av.id] && lockedAvatars[av.id] !== myPeerId) {
+                        showToast('该头像已被占用'); return;
+                    }
+                    myTempAvatar = av.id;
+                    renderAvatarGrid();
+                    updateButtonState();
+                    sendLocalUpdate();
+                };
+                avatarGrid.appendChild(cell);
+            });
+        }
+
+        function renderPlayersList() {
+            const allEntries = Object.entries(peers);
+            playerCount.textContent = allEntries.length;
+            if (allEntries.length === 0) {
+                playersList.innerHTML = '<div class="empty-state">🏰 等待玩家加入...</div>';
+                return;
+            }
+            playersList.innerHTML = allEntries.map(([pid, obj]) => {
+                const data = obj.data || {};
+                const isMe = pid === myPeerId;
+                const displayName = data.joined ? data.name : (data.tempName || '未命名');
+                const avatarId = data.joined ? data.avatarId : data.tempAvatar;
+                const avatarEmoji = avatarId !== undefined && avatarId !== null ? AVATARS[avatarId]?.emoji : '❓';
+                const joined = data.joined;
+                return `
+                    <div class="player-card ${isMe ? 'me' : ''}">
+                        <div class="player-avatar">${avatarEmoji}</div>
+                        <div style="flex:1;">
+                            <div class="player-name">${escapeHtml(displayName)}</div>
+                            <span class="status-tag ${joined ? 'joined' : ''}">${joined ? '已加入 ✓' : '选择中...'}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function updateButtonState() {
+            const hasName = nameInput.value.trim().length > 0;
+            const hasAvatar = myTempAvatar !== null;
+            if (myConfirmed) {
+                btnJoin.style.display = 'none';
+                btnLeave.style.display = 'inline-block';
+                nameInput.disabled = true;
+            } else {
+                btnJoin.style.display = 'inline-block';
+                btnLeave.style.display = 'none';
+                nameInput.disabled = false;
+                btnJoin.disabled = !(hasName && hasAvatar);
+            }
+        }
+
+        function renderAll() {
+            renderAvatarGrid();
+            renderPlayersList();
+            updateButtonState();
+        }
+
+        function becomeHost(peer) {
+            amHost = true;
+            roomPeerId = peer.id;
+            peers[myPeerId] = { conn: null, data: { tempName: '', tempAvatar: null, joined: false } };
+            updateConnectionUI(true);
+            roomIdDisplay.textContent = '房间 ID: ' + roomPeerId;
+            copyLinkBtn.style.display = 'inline-block';
+            showToast('你是主机，分享链接给其他人加入');
+            renderAll();
+
+            peer.on('connection', (conn) => {
+                console.log('新客户端连接:', conn.peer);
+                hostClientConns.push(conn);
+                if (!peers[conn.peer]) peers[conn.peer] = { conn, data: { tempName: '', tempAvatar: null, joined: false } };
+                else peers[conn.peer].conn = conn;
+                conn.send({ type: 'fullState', state: getFullState() });
+                broadcastToClients({ type: 'fullState', state: getFullState() });
+                renderAll();
+
+                conn.on('data', (data) => {
+                    if (data.type === 'update') {
+                        if (!peers[conn.peer]) peers[conn.peer] = { conn, data: {} };
+                        const pdata = peers[conn.peer].data;
+                        pdata.tempName = data.tempName;
+                        pdata.tempAvatar = data.tempAvatar;
+                        if (data.joined) {
+                            pdata.joined = true;
+                            pdata.name = data.name;
+                            pdata.avatarId = data.avatarId;
+                        } else {
+                            pdata.joined = false;
+                            pdata.name = null;
+                            pdata.avatarId = null;
+                        }
+                        broadcastToClients({ type: 'fullState', state: getFullState() });
+                        renderAll();
+                    }
+                });
+
+                conn.on('close', () => {
+                    console.log('客户端断开:', conn.peer);
+                    delete peers[conn.peer];
+                    hostClientConns = hostClientConns.filter(c => c.peer !== conn.peer);
+                    broadcastToClients({ type: 'fullState', state: getFullState() });
+                    renderAll();
+                });
+            });
+
+            copyLinkBtn.onclick = () => {
+                const link = location.origin + location.pathname + '?room=' + roomPeerId;
+                navigator.clipboard.writeText(link).then(() => showToast('邀请链接已复制！'));
+            };
+        }
+
+        function joinRoom(hostPeerId, peer) {
+            amHost = false;
+            roomPeerId = hostPeerId;
+            const conn = peer.connect(hostPeerId, { reliable: true });
+            hostConn = conn;
+            updateConnectionUI(false);
+            connText.textContent = '正在连接房间...';
+
+            conn.on('open', () => {
+                updateConnectionUI(true);
+                connText.textContent = '已加入房间';
+                showToast('成功加入房间！');
+                sendLocalUpdate();
+            });
+
+            conn.on('data', (data) => {
+                if (data.type === 'fullState') {
+                    applyFullState(data.state);
+                    if (!peers[myPeerId]) {
+                        peers[myPeerId] = { conn: null, data: { tempName: myTempName, tempAvatar: myTempAvatar, joined: !!myConfirmed } };
+                    }
+                    renderAll();
+                }
+            });
+
+            conn.on('close', () => {
+                updateConnectionUI(false);
+                connText.textContent = '连接断开，请刷新';
+                showToast('与主机断开连接');
+            });
+        }
+
+        nameInput.addEventListener('input', () => {
+            myTempName = nameInput.value.trim();
+            updateButtonState();
+            sendLocalUpdate();
+        });
+
+        btnJoin.addEventListener('click', () => {
+            if (!myTempName || myTempAvatar === null) return;
+            const locked = {};
+            for (const [pid, obj] of Object.entries(peers)) {
+                if (obj.data.joined && obj.data.avatarId !== undefined) locked[obj.data.avatarId] = pid;
+            }
+            if (locked[myTempAvatar] && locked[myTempAvatar] !== myPeerId) {
+                showToast('头像已被占用'); return;
+            }
+            myConfirmed = { name: myTempName, avatarId: myTempAvatar };
+            sendLocalUpdate();
+            renderAll();
+        });
+
+        btnLeave.addEventListener('click', () => {
+            myConfirmed = null;
+            myTempAvatar = null;
+            myTempName = '';
+            nameInput.value = '';
+            sendLocalUpdate();
+            renderAll();
+        });
+
+        function init() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const roomParam = urlParams.get('room');
+            const peer = new Peer(undefined, {
+                host: '0.peerjs.com',
+                port: 443,
+                secure: true,
+                debug: 0
+            });
+
+            peer.on('open', (id) => {
+                myPeerId = id;
+                if (!roomParam) {
+                    becomeHost(peer);
+                } else {
+                    roomPeerId = roomParam;
+                    peers[myPeerId] = { conn: null, data: { tempName: '', tempAvatar: null, joined: false } };
+                    joinRoom(roomParam, peer);
+                    roomIdDisplay.textContent = '加入房间: ' + roomParam;
+                }
+            });
+
+            peer.on('error', (err) => {
+                console.error('Peer错误:', err);
+                updateConnectionUI(false);
+                connText.textContent = '连接失败: ' + err.type;
+                showToast('连接失败，请刷新重试');
+            });
+
+            renderAll();
+        }
+
+        init();
+    })();
+</script>
+</body>
+</html>
