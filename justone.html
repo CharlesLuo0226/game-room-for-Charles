@@ -100,7 +100,6 @@
             font-size: 1.2rem;
             color: var(--gold);
         }
-        /* 公告横幅 */
         .announcement {
             position: fixed;
             top: 80px;
@@ -253,7 +252,20 @@
         .btn-outline:hover { border-color: white; color: white; }
         .btn-danger { background: #ff4757; padding: 4px 12px; font-size: 0.8rem; border-radius: 30px; }
         .btn-success { background: var(--green); padding: 4px 12px; font-size: 0.8rem; border-radius: 30px; }
-        .btn-small { padding: 4px 12px; font-size: 0.7rem; margin-left: 8px; }
+        .btn-icon {
+            padding: 4px 8px;
+            margin-left: 6px;
+            font-size: 1rem;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            border-radius: 20px;
+            transition: 0.1s;
+        }
+        .btn-icon:hover { background: rgba(255,255,255,0.2); transform: scale(1.05); }
+        .btn-icon-transfer { color: var(--gold); }
+        .btn-icon-spectator { color: #ff4757; }
+        .btn-icon-player { color: var(--green); }
         .score-round {
             display: flex;
             justify-content: space-between;
@@ -382,6 +394,48 @@
             border-radius: 40px;
             color: var(--gold);
         }
+        [data-tooltip] {
+            position: relative;
+            cursor: pointer;
+        }
+        [data-tooltip]:before {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #333;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 8px;
+            font-size: 0.7rem;
+            white-space: nowrap;
+            z-index: 100;
+            display: none;
+        }
+        [data-tooltip]:hover:before {
+            display: block;
+        }
+        /* 主持人设定词语面板 */
+        .host-word-panel {
+            background: rgba(0,0,0,0.4);
+            border-radius: var(--radius-md);
+            padding: 16px;
+            margin-top: 8px;
+        }
+        .host-word-input-row {
+            display: flex;
+            gap: 10px;
+            margin-top: 8px;
+        }
+        .host-word-input-row input {
+            flex: 1;
+            padding: 10px;
+            border-radius: var(--radius-sm);
+            background: rgba(255,255,255,0.1);
+            border: 1px solid var(--border-light);
+            color: white;
+        }
     </style>
 </head>
 <body>
@@ -453,6 +507,14 @@
                     <button class="btn btn-primary hidden" id="startGameBtn">🚀 开始游戏</button>
                     <button class="btn btn-outline hidden" id="leaveGameBtn">🚪 返回大厅</button>
                 </div>
+                <!-- 主持人手动设定词语面板（仅在游戏进行中且主机可见） -->
+                <div id="hostWordPanel" class="host-word-panel hidden">
+                    <div class="panel-title" style="font-size:1rem;">✏️ 主持人设定本轮词语</div>
+                    <div class="host-word-input-row">
+                        <input type="text" id="hostWordInput" placeholder="输入本轮要猜的词语（留空则从词库随机）" maxlength="20">
+                        <button class="btn btn-secondary" id="setWordBtn">设定词语</button>
+                    </div>
+                </div>
             </div>
             <div class="side-panel">
                 <div class="players-panel">
@@ -463,7 +525,7 @@
                     <div class="panel-title"><span>💬</span> 聊天</div>
                     <div class="chat-messages" id="chatMessages"></div>
                     <div class="chat-input-row">
-                        <input type="text" id="chatInput" placeholder="输入消息... 主持人可用 /announce 内容 发布公告" maxlength="200">
+                        <input type="text" id="chatInput" placeholder="输入消息... 主持人可用 \\all 内容 发布公告" maxlength="200">
                         <button id="chatSendBtn">发送</button>
                     </div>
                 </div>
@@ -473,7 +535,7 @@
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     <script>
         (function(){
-            // ---------- 词库 ----------
+            // ==================== 扩充到500词的词库 ====================
             const WORD_BANK = [
                 "可乐","螺丝刀","茧","巧克力","钢琴","火山","彩虹","恐龙","芭蕾","海盗",
                 "沙滩","宇宙","魔法","城堡","侦探","电池","密码","天使","幽灵","钻石",
@@ -485,19 +547,67 @@
                 "医生","老师","警察","厨师","画家","歌手","舞者","宇航员","魔术师","国王",
                 "电脑","手机","电视","冰箱","洗衣机","空调","微波炉","吸尘器","打印机","闹钟",
                 "面条","饺子","蛋糕","冰淇淋","爆米花","巧克力","饼干","汉堡","披萨","寿司",
-                "篮球","网球","游泳","滑雪","拳击","骑马","射箭","钓鱼","体操","滑冰"
+                "篮球","网球","游泳","滑雪","拳击","骑马","射箭","钓鱼","体操","滑冰",
+                "爱情","友情","亲情","梦想","希望","勇气","信心","诚实","善良","宽容",
+                "春天","夏天","秋天","冬天","风雨","雷电","云雾","霜雪","冰雹","彩虹",
+                "红色","橙色","黄色","绿色","青色","蓝色","紫色","白色","黑色","灰色",
+                "猫","狗","兔","鸟","鱼","虫","花","草","树","木",
+                "金","木","水","火","土","风","花","雪","月","夜",
+                "快乐","悲伤","愤怒","恐惧","惊讶","厌恶","期待","失望","怀念","憧憬",
+                "奔跑","跳跃","飞翔","游泳","爬行","行走","坐下","站立","躺卧","跪拜",
+                "阅读","写作","计算","思考","记忆","遗忘","创造","毁灭","建设","破坏",
+                "筷子","勺子","叉子","刀子","盘子","碗","杯子","锅","铲","灶",
+                "床","沙发","桌子","椅子","柜子","书架","灯具","窗帘","地毯","镜子",
+                "钢笔","铅笔","橡皮","尺子","圆规","量角器","笔记本","文件夹","订书机","胶水",
+                "米饭","面条","馒头","包子","饺子","馄饨","汤圆","年糕","粽子","月饼",
+                "咖啡","茶","牛奶","果汁","汽水","啤酒","红酒","白酒","黄酒","米酒",
+                "红楼梦","西游记","水浒传","三国演义","史记","汉书","论语","道德经","诗经","楚辞",
+                "北京","上海","广州","深圳","杭州","南京","成都","武汉","西安","重庆",
+                "长城","故宫","西湖","黄山","泰山","峨眉山","九寨沟","张家界","桂林","三亚",
+                "春节","元宵","端午","中秋","重阳","七夕","清明","冬至","腊八","除夕",
+                "红包","鞭炮","灯笼","春联","年画","窗花","福字","饺子","汤圆","年糕",
+                "熊猫","金丝猴","藏羚羊","扬子鳄","朱鹮","丹顶鹤","东北虎","华南虎","雪豹","白鳍豚",
+                "书法","绘画","音乐","舞蹈","戏剧","电影","摄影","雕塑","建筑","文学",
+                "围棋","象棋","麻将","扑克","骰子","积木","拼图","魔方","九连环","七巧板",
+                "针灸","推拿","拔罐","刮痧","艾灸","中药","方剂","脉诊","舌诊","望诊",
+                "京剧","昆曲","越剧","黄梅戏","评剧","豫剧","川剧","秦腔","晋剧","河北梆子",
+                "武术","太极","气功","养生","导引","八段锦","五禽戏","易筋经","六字诀","十二段锦",
+                "龙","凤","麒麟","玄武","朱雀","青龙","白虎","貔貅","饕餮","混沌",
+                "仙女","玉帝","王母","土地","城隍","灶神","财神","福神","寿星","喜神",
+                "观音","如来","弥勒","文殊","普贤","地藏","罗汉","金刚","力士","飞天",
+                "李白","杜甫","白居易","王维","孟浩然","苏轼","辛弃疾","李清照","陆游","陶渊明",
+                "孔子","孟子","老子","庄子","墨子","荀子","韩非子","孙子","鬼谷子","列子",
+                "黄帝","炎帝","蚩尤","尧舜","禹汤","文武","周公","姜尚","管仲","商鞅",
+                "岳飞","文天祥","郑成功","林则徐","孙中山","毛泽东","周恩来","朱德","邓小平","鲁迅",
+                "长城","故宫","天坛","颐和园","圆明园","承德避暑山庄","苏州园林","杭州西湖","桂林山水","长江三峡",
+                "烤鸭","火锅","小笼包","生煎包","肠粉","烧卖","叉烧","烧鹅","腊味","煲仔饭",
+                "太极剑","太极拳","少林拳","咏春拳","八极拳","形意拳","八卦掌","戳脚","翻子拳","劈挂拳",
+                "古琴","古筝","琵琶","二胡","笛子","箫","笙","唢呐","扬琴","阮",
+                "丝绸","瓷器","茶叶","宣纸","湖笔","徽墨","端砚","玉器","漆器","竹编",
+                "端午节","赛龙舟","吃粽子","挂艾草","饮雄黄","佩香囊","画额头","放纸鸢","打马球","射柳",
+                "重阳节","登高","赏菊","插茱萸","吃重阳糕","饮菊花酒","放风筝","敬老","秋游","祭祖",
+                "七夕节","乞巧","穿针","喜蛛应巧","投针验巧","种生求子","为牛庆生","晒书晒衣","拜织女","拜魁星",
+                "中秋节","赏月","吃月饼","燃灯","观潮","猜谜","赏桂花","饮桂花酒","玩花灯","烧塔"
             ];
+            // 去重并确保至少500词（实际已超过500）
+            const uniqueWords = [...new Set(WORD_BANK)];
+            const FINAL_WORD_BANK = uniqueWords;
+            
             function getRandomWords(count) {
-                const shuffled = [...WORD_BANK].sort(() => Math.random() - 0.5);
+                const shuffled = [...FINAL_WORD_BANK].sort(() => Math.random() - 0.5);
                 return shuffled.slice(0, Math.min(count, shuffled.length));
             }
+            // 随机获取一个词语
+            function getRandomWord() {
+                return FINAL_WORD_BANK[Math.floor(Math.random() * FINAL_WORD_BANK.length)];
+            }
+
             function normalizeClue(clue) { return clue.trim().toLowerCase(); }
 
             const $ = (s) => document.querySelector(s);
             const showToast = (msg) => { const t = document.createElement('div'); t.className='toast'; t.textContent=msg; document.body.appendChild(t); setTimeout(()=>t.remove(),2500); };
             const escapeHtml = (s) => { const d=document.createElement('div'); d.textContent=s; return d.innerHTML; };
 
-            // 显示全局公告
             function showAnnouncement(msg, senderName = "主持人") {
                 const div = document.createElement('div');
                 div.className = 'announcement';
@@ -506,7 +616,6 @@
                 setTimeout(() => { if(div.parentNode) div.parentNode.removeChild(div); }, 5000);
             }
 
-            // 全局变量
             let myPeerId = null;
             let myInfo = { name: '玩家', avatar: 0, spectator: false };
             let amHost = false;
@@ -531,7 +640,6 @@
             myInfo.avatar = parseInt(urlParams.get('avatar') || '0');
             myInfo.spectator = hostParam ? true : (urlParams.get('spectator') === '1');
 
-            // DOM 元素
             const connDot = $('#connDot'), connText = $('#connText'), roomIdDisplay = $('#roomIdDisplay'), phaseIndicator = $('#phaseIndicator');
             const timerSpan = $('#timer');
             const wordDisplay = $('#wordDisplay');
@@ -545,6 +653,7 @@
             const startGameBtn = $('#startGameBtn'), leaveGameBtn = $('#leaveGameBtn');
             const playersListContainer = $('#playersListContainer');
             const chatPanel = $('#chatPanel'), chatMessages = $('#chatMessages'), chatInput = $('#chatInput'), chatSendBtn = $('#chatSendBtn');
+            const hostWordPanel = $('#hostWordPanel'), hostWordInput = $('#hostWordInput'), setWordBtn = $('#setWordBtn');
 
             function updateConnectionUI(ok, msg=null) {
                 connDot.className = 'connection-dot' + (ok ? '' : ' disconnected');
@@ -587,12 +696,39 @@
                 else if (name === 'host_judge') phaseIndicator.textContent = '🎬 主持人判定猜词结果';
                 else if (name === 'result') phaseIndicator.textContent = '📊 本轮结束 - 主持人点击下一轮';
                 else if (name === 'ended') phaseIndicator.textContent = '🏁 游戏结束';
-                // 控制聊天面板显示：始终显示（因为需要发送公告）
                 chatPanel.classList.remove('hidden');
+                // 控制主持人词语输入面板显示
+                if (amHost && (name === 'lobby' || name === 'result' || name === 'host_filter')) {
+                    hostWordPanel.classList.remove('hidden');
+                } else {
+                    hostWordPanel.classList.add('hidden');
+                }
+            }
+            // 主持人设定本轮词语
+            function hostSetWord() {
+                if (!amHost) return;
+                let newWord = hostWordInput.value.trim();
+                if (!newWord) {
+                    // 为空则随机从词库选取
+                    newWord = getRandomWord();
+                    showToast(`未输入词语，已随机选择: ${newWord}`);
+                }
+                // 更新当前词语
+                if (gameState && (gameState.phase === 'lobby' || gameState.phase === 'result' || gameState.phase === 'host_filter')) {
+                    gameState.currentWord = newWord;
+                    // 同时更新词库中对应位置
+                    if (gameState.wordList && gameState.wordList.length > gameState.round) {
+                        gameState.wordList[gameState.round] = newWord;
+                    }
+                    broadcastState();
+                    showToast(`已设定本轮回合词语: ${newWord}`);
+                    hostWordInput.value = '';
+                } else {
+                    showToast('只能在等待开始、结果阶段或筛选阶段设定词语');
+                }
             }
             function renderWord() {
                 if (!gameState) { wordDisplay.textContent = '等待开始...'; return; }
-                // 观众视角跟随猜词者
                 const isViewer = myInfo.spectator && !amHost;
                 if (isViewer && gameState.guesserPeerId) {
                     if (gameState.phase === 'result' || gameState.phase === 'host_judge') {
@@ -648,13 +784,11 @@
                 const key = `${pid}|${clue}`;
                 return gameState.hostHiddenClues[key] === true;
             }
-            // 主持人将某玩家转为旁观者
             function convertToSpectator(targetPeerId) {
                 if (!amHost) return;
                 if (!gameState.players[targetPeerId] || targetPeerId === myPeerId) return;
                 gameState.players[targetPeerId].joined = false;
                 gameState.players[targetPeerId].spectator = true;
-                // 如果被转的是当前猜词者，需要重新分配猜词者（仅当游戏进行中）
                 if (gameState.guesserPeerId === targetPeerId && gameState.phase !== 'lobby' && gameState.phase !== 'ended') {
                     const joinedPlayers = Object.entries(gameState.players).filter(([pid,p])=>p.joined);
                     if (joinedPlayers.length > 0) {
@@ -666,7 +800,6 @@
                 broadcastState();
                 showToast(`已将 ${gameState.players[targetPeerId].name} 转为观众`);
             }
-            // 主持人将旁观者转为玩家
             function convertToPlayer(targetPeerId) {
                 if (!amHost) return;
                 if (!gameState.players[targetPeerId] || targetPeerId === myPeerId) return;
@@ -679,36 +812,15 @@
                 broadcastState();
                 showToast(`已将 ${gameState.players[targetPeerId].name} 加入游戏`);
             }
-            // 转移主持人权限
             function transferHost(targetPeerId) {
                 if (!amHost) return;
                 if (!gameState.players[targetPeerId] || targetPeerId === myPeerId) return;
                 const newHostName = gameState.players[targetPeerId].name;
-                // 原主持人变为观众
-                gameState.players[myPeerId].joined = false;
-                gameState.players[myPeerId].spectator = true;
-                // 新主持人设置为 spectator=false, joined=false? 主持人应该是旁观者，不参与游戏
-                gameState.players[targetPeerId].spectator = true;
-                gameState.players[targetPeerId].joined = false;
-                // 广播一条特殊的转移消息，让所有客户端知道新主机是谁（通过 gameState 同步，新主机会在 applyGameState 中检测并成为主机）
-                // 但主机权限需要借助 Peer 连接重新初始化。最稳妥的方式：通知所有客户端刷新页面或重新连接？不好。
-                // 更好的方式：在原主机上广播一条 “newHost” 消息，让新主机重新初始化 Peer 实例？复杂。
-                // 简化：只改变玩家的 spectator 状态，并显示公告提示，新主机需要在浏览器控制台或刷新页面才能完全接管？不。
-                
-                // 由于主机权限依赖于 amHost 变量，且 peer 连接是固定的，不能中途更改身份。因此我们采用一种变通：
-                // 告知所有玩家原主机已将权限转移，新主机应重新加载页面（通过公告提示）。或者我们实现一个动态切换机制。
-                // 这里实现一个较完整的方案：原主机发送“hostTransfer”消息给新主机，新主机收到后重新初始化为新的主机。
-                // 但新主机需要断开原来的连接，再用自己的 Peer ID 重新成为主机？很复杂，容易出错。
-                // 折中：显示公告提示所有人（包括新主持人），需要新主持人复制房间链接重新以主持人身份进入。
-                
                 showAnnouncement(`主机已将主持人权限转移给 ${newHostName}，请 ${newHostName} 刷新页面后以主持人身份重新进入`, "系统");
                 showToast(`权限已转移，请提醒 ${newHostName} 刷新页面并使用原链接以主持人身份进入`);
-                // 在聊天中发送系统消息
                 addChatMessage("系统", `🎤 主持人已将权限转移给 ${newHostName}，请 ${newHostName} 刷新页面后以主持人身份重新进入`, Date.now(), null);
                 return;
             }
-
-            // 主持人筛选列表渲染
             function renderFilterList() {
                 if (!gameState || !gameState.clues) { 
                     filterClueList.innerHTML = '<div class="empty-state">暂无玩家提交线索</div>';
@@ -738,15 +850,13 @@
                     };
                 });
             }
-            // 线索列表渲染（观众跟随猜词者视角）
             function renderClueList() {
                 if (!gameState || !gameState.clues) { clueList.innerHTML = ''; return; }
                 const phase = gameState.phase;
                 const allClues = Object.entries(gameState.clues);
                 const eliminated = gameState.eliminatedClues || {};
                 const isViewer = myInfo.spectator && !amHost;
-                let effectiveGuesserId = gameState.guesserPeerId;
-                if (isViewer && effectiveGuesserId) {
+                if (isViewer && gameState.guesserPeerId) {
                     if (phase === 'guess' || phase === 'host_judge') {
                         const valid = allClues.filter(([pid, clue]) => !eliminated[clue] && !isHiddenByHost(pid, clue));
                         if (valid.length === 0) { clueList.innerHTML = '<div class="empty-state">🔍 所有线索都无效或被主持人隐藏，没有有效提示...</div>'; return; }
@@ -877,7 +987,6 @@
                     roundDisplay.textContent = `第 ${currentRound} / ${totalRounds} 轮`;
                 }
             }
-            // 渲染玩家列表（按角色分组，主持人可见管理按钮）
             function renderPlayersList() {
                 if (!gameState || !gameState.players) {
                     playersListContainer.innerHTML = '<div class="empty-state">等待玩家加入...</div>';
@@ -886,52 +995,47 @@
                 const players = gameState.players;
                 const hostId = Object.keys(players).find(pid => amHost && pid === myPeerId) || (amHost ? myPeerId : null);
                 const guesserId = gameState.guesserPeerId;
-                // 非主持人、非猜词者、非旁观者 = 提供线索者
                 const providers = Object.entries(players).filter(([pid, p]) => p.joined && pid !== guesserId && (!amHost || pid !== myPeerId));
                 const spectators = Object.entries(players).filter(([pid, p]) => p.spectator && (!amHost || pid !== myPeerId));
                 
                 let html = '<div class="player-list">';
-                // 主持人
                 if (amHost && players[myPeerId]) {
                     const p = players[myPeerId];
                     html += `<div class="player-category"><div class="player-category-title">🎤 主持人</div><div class="player-group"><div class="player-card me"><span class="player-avatar">${getPlayerAvatarEmoji(myPeerId)}</span><span>${escapeHtml(p.name)}</span></div></div></div>`;
                 } else if (hostId && players[hostId]) {
                     html += `<div class="player-category"><div class="player-category-title">🎤 主持人</div><div class="player-group"><div class="player-card"><span class="player-avatar">${getPlayerAvatarEmoji(hostId)}</span><span>${escapeHtml(players[hostId].name)}</span></div></div></div>`;
                 }
-                // 猜词者
                 if (guesserId && players[guesserId]) {
                     const p = players[guesserId];
                     const meClass = (guesserId === myPeerId) ? 'me' : '';
                     html += `<div class="player-category"><div class="player-category-title">🔍 猜词者</div><div class="player-group"><div class="player-card ${meClass}"><span class="player-avatar">${getPlayerAvatarEmoji(guesserId)}</span><span>${escapeHtml(p.name)}</span>`;
                     if (amHost && guesserId !== myPeerId) {
-                        html += `<button class="btn btn-small convert-spectator" data-pid="${guesserId}" style="background:#ff4757;">转观众</button>`;
-                        html += `<button class="btn btn-small transfer-host" data-pid="${guesserId}" style="background:var(--gold);">👑 转主持人</button>`;
+                        html += `<button class="btn-icon btn-icon-spectator" data-pid="${guesserId}" data-action="spectator" data-tooltip="转为观众">↩️</button>`;
+                        html += `<button class="btn-icon btn-icon-transfer" data-pid="${guesserId}" data-action="transfer" data-tooltip="转为主持人">👑</button>`;
                     }
                     html += `</div></div></div>`;
                 }
-                // 提供线索者（每行两个）
                 if (providers.length > 0) {
                     html += `<div class="player-category"><div class="player-category-title">✏️ 提供线索</div><div class="player-group" style="display: flex; flex-wrap: wrap; gap: 8px;">`;
                     providers.forEach(([pid, p]) => {
                         const meClass = (pid === myPeerId) ? 'me' : '';
                         html += `<div class="player-card ${meClass}" style="width: calc(50% - 8px);"><span class="player-avatar">${getPlayerAvatarEmoji(pid)}</span><span>${escapeHtml(p.name)}</span>`;
                         if (amHost && pid !== myPeerId) {
-                            html += `<button class="btn btn-small convert-spectator" data-pid="${pid}" style="background:#ff4757;">转观众</button>`;
-                            html += `<button class="btn btn-small transfer-host" data-pid="${pid}" style="background:var(--gold);">👑 转主持人</button>`;
+                            html += `<button class="btn-icon btn-icon-spectator" data-pid="${pid}" data-action="spectator" data-tooltip="转为观众">↩️</button>`;
+                            html += `<button class="btn-icon btn-icon-transfer" data-pid="${pid}" data-action="transfer" data-tooltip="转为主持人">👑</button>`;
                         }
                         html += `</div>`;
                     });
                     html += `</div></div>`;
                 }
-                // 旁观者（每行三个），并带有“加入游戏”按钮
                 if (spectators.length > 0) {
                     html += `<div class="player-category"><div class="player-category-title">👀 旁观</div><div class="player-group" style="display: flex; flex-wrap: wrap; gap: 8px;">`;
                     spectators.forEach(([pid, p]) => {
                         const meClass = (pid === myPeerId) ? 'me' : '';
                         html += `<div class="player-card ${meClass}" style="width: calc(33.33% - 8px);"><span class="player-avatar">${getPlayerAvatarEmoji(pid)}</span><span>${escapeHtml(p.name)}</span>`;
                         if (amHost && pid !== myPeerId) {
-                            html += `<button class="btn btn-small convert-player" data-pid="${pid}" style="background:var(--green);">➕ 加入游戏</button>`;
-                            html += `<button class="btn btn-small transfer-host" data-pid="${pid}" style="background:var(--gold);">👑 转主持人</button>`;
+                            html += `<button class="btn-icon btn-icon-player" data-pid="${pid}" data-action="player" data-tooltip="加入游戏">➕</button>`;
+                            html += `<button class="btn-icon btn-icon-transfer" data-pid="${pid}" data-action="transfer" data-tooltip="转为主持人">👑</button>`;
                         }
                         html += `</div>`;
                     });
@@ -939,16 +1043,13 @@
                 }
                 html += `</div>`;
                 playersListContainer.innerHTML = html;
-                // 绑定转换观众按钮事件
-                document.querySelectorAll('.convert-spectator').forEach(btn => {
+                document.querySelectorAll('[data-action="spectator"]').forEach(btn => {
                     btn.onclick = () => { const pid = btn.dataset.pid; convertToSpectator(pid); };
                 });
-                // 绑定加入游戏按钮事件
-                document.querySelectorAll('.convert-player').forEach(btn => {
+                document.querySelectorAll('[data-action="player"]').forEach(btn => {
                     btn.onclick = () => { const pid = btn.dataset.pid; convertToPlayer(pid); };
                 });
-                // 绑定转移主持人按钮事件
-                document.querySelectorAll('.transfer-host').forEach(btn => {
+                document.querySelectorAll('[data-action="transfer"]').forEach(btn => {
                     btn.onclick = () => { const pid = btn.dataset.pid; transferHost(pid); };
                 });
             }
@@ -963,24 +1064,20 @@
             function handleChatSend() {
                 let text = chatInput.value.trim();
                 if (!text) return;
-                // 如果当前是主持人且消息以 /announce 开头，则发送全局公告
-                if (amHost && text.startsWith('/announce')) {
-                    let announceText = text.slice(9).trim();
+                if (amHost && text.startsWith('\\all')) {
+                    let announceText = text.slice(5).trim();
                     if (announceText) {
                         showAnnouncement(announceText, myInfo.name);
-                        // 同时将公告发送到聊天记录
                         addChatMessage("系统", `📢 主持人公告：${announceText}`, Date.now(), null);
-                        // 广播给所有客户端
                         const msg = { type: 'announce', text: announceText, senderName: myInfo.name };
                         broadcastToClients(msg);
                         chatInput.value = '';
                         return;
                     } else {
-                        showToast("格式：/announce 公告内容");
+                        showToast("格式：\\all 公告内容");
                         return;
                     }
                 }
-                // 普通聊天消息
                 const timestamp = Date.now();
                 const msg = { type: 'chat', sender: myInfo.name, text, timestamp, senderId: myPeerId };
                 chatInput.value = '';
@@ -1038,7 +1135,6 @@
                 if (!amHost && state.timerRemaining !== undefined && state.timerRemaining > 0) syncTimer(state.timerRemaining);
                 else if (!amHost) stopTimer();
             }
-            // 主机端逻辑（省略与之前相同，保留完整功能）
             function hostOnClueTimeout() { if (!amHost || gameState.phase !== 'clue') return; stopTimer(); gameState.phase = 'host_filter'; broadcastState(); showToast('线索提交时间到，进入主持人筛选阶段'); }
             function hostOnGuessTimeout() { if (!amHost || gameState.phase !== 'guess') return; hostProcessGuessTimeout(); }
             function hostProcessGuessTimeout() {
@@ -1246,7 +1342,6 @@
                 }
                 leaveGameBtn.classList.remove('hidden');
             }
-            // 事件绑定
             startGameBtn.onclick = hostStartGame;
             leaveGameBtn.onclick = () => { intentionalDisconnect=true; if(hostConn) hostConn.close(); window.location.href='index.html'; };
             clueSubmitBtn.onclick = () => {
@@ -1266,8 +1361,10 @@
             confirmFilterBtn.onclick = () => { if(amHost) hostConfirmFilter(); };
             judgeCorrectBtn.onclick = () => { if(amHost) hostJudge(true); };
             judgeWrongBtn.onclick = () => { if(amHost) hostJudge(false); };
+            setWordBtn.onclick = () => { hostSetWord(); };
             chatSendBtn.onclick = handleChatSend;
             chatInput.addEventListener('keydown',e=>{ if(e.key==='Enter') handleChatSend(); });
+            hostWordInput.addEventListener('keydown',e=>{ if(e.key==='Enter') hostSetWord(); });
             init();
         })();
     </script>
